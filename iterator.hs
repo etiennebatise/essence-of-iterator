@@ -19,3 +19,5 @@ unfoldFix :: Bifunctor s =>  (b -> s a b) -> b -> Fix s a
 unfoldFix f  = In . bimap id (unfoldFix f) . f
 
 
+
+-- 2.2 Crush
