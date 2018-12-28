@@ -90,3 +90,28 @@ instance Applicative Stream where
 
 
 newtype Reader r a = Reader { runReader :: r -> a }
+
+-- 3.2 Monoidal applicative functors
+
+newtype Const b a = Const { unConst :: b }
+
+class Monoid a where
+  mempty :: a
+  mappend :: a -> a -> a
+  mconcat :: [a] -> a
+
+instance Functor (Const b) where
+  fmap _ (Const x) = Const x
+
+instance Monoid b => Applicative (Const b) where
+  pure _ = Const mempty
+  f <*> x = Const (unConst f `mappend` unConst x)
+
+instance Functor [] where
+  fmap f (x:xs) = f x : (fmap f xs)
+  fmap f _ = []
+
+instance Applicative [] where
+  pure x = xs where xs = x:xs
+  (f:fs) <*> (x:xs) = f x : (fs <*> xs)
+  _ <*> _ = []
