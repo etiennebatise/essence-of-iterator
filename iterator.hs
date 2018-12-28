@@ -1,4 +1,8 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+import Data.Monoid
+import Data.Monoid (Sum)
+import Prelude (Integer, Num)
+
 
 (.) :: (b -> c) -> (a -> b) -> (a -> c)
 f . g = \x -> f (g x)
@@ -28,6 +32,7 @@ foldFix f = f . bimap id (foldFix f) . out
 
 unfoldFix :: Bifunctor s =>  (b -> s a b) -> b -> Fix s a
 unfoldFix f  = In . bimap id (unfoldFix f) . f
+
 
 
 
@@ -95,10 +100,10 @@ newtype Reader r a = Reader { runReader :: r -> a }
 
 newtype Const b a = Const { unConst :: b }
 
-class Monoid a where
-  mempty :: a
-  mappend :: a -> a -> a
-  mconcat :: [a] -> a
+-- class Monoid a where
+--   mempty :: a
+--   mappend :: a -> a -> a
+--   mconcat :: [a] -> a
 
 instance Functor (Const b) where
   fmap _ (Const x) = Const x
@@ -144,3 +149,56 @@ instance (Functor m, Functor n) => Functor (Comp m n) where
 instance (Applicative m, Applicative n) => Applicative (Comp m n) where
   pure = Comp . pure . pure
   f <*> x = Comp (pure (<*>) <*> unComp f <*> unComp x)
+
+-- 3.4 Idiomatic Traversal
+
+traverseList :: Applicative m => (a -> m b) -> [a] -> m [b]
+traverseList _ [] = pure []
+traverseList f (x:xs) = pure (:) <*> f x <*> traverseList f xs
+
+distList :: Applicative m => [m a] -> m [a]
+distList = traverseList id
+
+class (Functor t) => Traversable t where
+  traverse :: Applicative m => (a -> m b) -> t a -> m (t b)
+  traverse f = dist . fmap f
+
+  dist :: Applicative m => t (m a) -> m (t a)
+  dist = traverse id
+
+data Tree a = Leaf a | Bin (Tree a) (Tree a)
+
+instance Functor Tree where
+  fmap f (Leaf x) = Leaf (f x)
+  fmap f (Bin x y) = Bin (fmap f x) (fmap f y)
+
+instance Traversable Tree where
+  traverse f (Leaf x) = pure Leaf <*> (f x)
+  traverse f (Bin x y) = pure Bin <*> traverse f x <*> traverse f y
+
+
+class Bifunctor s => Bitraversable s where
+  bidist :: Applicative m => s (m a) (m b) -> m (s a b)
+
+instance Bifunctor s => Functor (Fix s) where
+  fmap = mapFix
+
+instance Bitraversable s => Traversable (Fix s) where
+  traverse f = foldFix(fmap In . bidist . bimap f id)
+
+newtype Id a = Id { unId :: a }
+instance Functor Id where
+  fmap f = Id . f . unId
+
+instance Applicative Id where
+  pure = Id
+  f <*> x = Id (unId f $ unId x)
+
+reduce :: (Traversable t, Monoid m) => (a -> m) -> t a -> m
+reduce f = unConst . traverse (Const . f)
+
+crush :: (Traversable t, Monoid m)  => t m -> m
+crush = reduce id
+
+tsum :: (Traversable t) => t (Sum Integer) -> Sum Integer
+tsum = crush
