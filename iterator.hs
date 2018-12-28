@@ -115,3 +115,32 @@ instance Applicative [] where
   pure x = xs where xs = x:xs
   (f:fs) <*> (x:xs) = f x : (fs <*> xs)
   _ <*> _ = []
+
+-- 3.3 Combining applicative functors
+
+data (Prod m n) a = Prod { pfst :: m a, psnd :: n a }
+
+(<&>) :: (Functor m, Functor n) => (a -> m b) -> (a -> n b) -> (a -> (Prod m n) b)
+(<&>) f g x = Prod (f x) (g x)
+
+instance (Functor m, Functor n) => Functor (Prod m n) where
+  fmap f x = Prod (fmap f (pfst x)) (fmap f (psnd x))
+
+
+instance (Applicative m, Applicative n) => Applicative (Prod m n) where
+  pure x = Prod (pure x) (pure x)
+  f <*> x = Prod (pfst f <*> pfst x) (psnd f <*> psnd x)
+
+
+data (Comp m n) a = Comp { unComp :: m (n a) }
+
+(<.>) :: (Functor n, Functor m) => (b -> n c) -> (a -> m b) -> (a -> (Comp m n) c)
+f <.> g = Comp . fmap f . g
+
+
+instance (Functor m, Functor n) => Functor (Comp m n) where
+  fmap f = Comp . fmap (fmap f) . unComp
+
+instance (Applicative m, Applicative n) => Applicative (Comp m n) where
+  pure = Comp . pure . pure
+  f <*> x = Comp (pure (<*>) <*> unComp f <*> unComp x)
