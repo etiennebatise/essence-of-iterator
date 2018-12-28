@@ -29,10 +29,16 @@ class Functor f where
   -- fmap (f . g) = fmap f . fmap g -- composition
   fmap :: (a -> b) -> f a -> f b
 
-class Functor m => Monad m where
+class Main.Functor m => Monad m where
   -- should satisfy these laws:
   -- return a >>= f = f a -- left unit
   -- mx >>= return = mx -- right unit
   -- (mx >>= f) >>= g = mx >>= (\x -> f x >>= g) -- associativity
-  >>= :: m a -> (a -> m b) -> m b
+  (>>=) :: m a -> (a -> m b) -> m b
   return :: a -> m a
+
+-- 3. APPLICATIVE FUNCTORS
+
+class Main.Functor m => Applicative m where
+  pure :: a -> m a
+  (<*>) :: m (a -> b) -> m a -> m b
