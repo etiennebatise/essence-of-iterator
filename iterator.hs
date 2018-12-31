@@ -371,3 +371,23 @@ ptraverse (AppAdapter insert retrieve) f = retrieve . traverse (insert . f)
 traverse (g . h) = traverse g . fmap h
 traverse (fmap k . f) = fmap (fma k) . traverse f
 -}
+
+-- 5.2 Sequential composition of traversals
+
+{-
+| dist should respect identity A.F. and composition A.F. :
+
+dist . fmap Id = Id
+dist . fmap Comp = Comp . fmap dist .dist
+
+| Corollaries, properties of traverse:
+
+(1) traverse (Id . f) = Id . fmap f
+(2) traverse (Comp . fmap f . g) = Comp . fmap (traverse f) . traverse g
+
+Which means:
+(1) => traverse in the Id A.F. is essentially just fmap
+(2) => provides a fusion rule for sequential composition of 2 traversals
+(2) => traverse (f <.> g) = traverse f <.> traverse g
+-}
+
