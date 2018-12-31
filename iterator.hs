@@ -7,7 +7,7 @@
 
 import Data.Monoid
 import Data.Monoid (Sum)
-import Prelude (Integer, Num)
+import Prelude (Integer, Num, Maybe(..), uncurry, fst)
 
 
 (.) :: (b -> c) -> (a -> b) -> (a -> c)
@@ -104,17 +104,17 @@ newtype Reader r a = Reader { runReader :: r -> a }
 
 -- 3.2 Monoidal applicative functors
 
-newtype Const b a = Const { unConst :: b }
+newtype Const a b = Const { unConst :: a }
 
 -- class Monoid a where
 --   mempty :: a
 --   mappend :: a -> a -> a
 --   mconcat :: [a] -> a
 
-instance Functor (Const b) where
+instance Functor (Const a) where
   fmap _ (Const x) = Const x
 
-instance Monoid b => Applicative (Const b) where
+instance Monoid a => Applicative (Const a) where
   pure _ = Const mempty
   f <*> x = Const (unConst f `mappend` unConst x)
 
@@ -232,3 +232,76 @@ instance (Functor m, Functor n, Coerce (m b) c, Coerce (n a) b) => Coerce (Comp 
 instance Coerce (m a) b => Coerce (M m a) b where
   down = down . unWrap
   up = Wrap . up
+
+ -- 4.1 Shape and contents
+
+-- monoid
+contentsBody :: a -> Const [a] b
+contentsBody a = up [a]
+
+contents :: Traversable t => t a -> Const [a] (t b)
+contents = traverse contentsBody
+
+run :: (Traversable t, Coerce b c) => (t a -> b) -> t a -> c
+run f = down . f
+
+runContents :: (Traversable t) => t a -> [a]
+runContents = run contents
+-- = reduce (:[])
+
+shapeBody :: a -> Id ()
+shapeBody _ = Id ()
+
+shape :: Traversable t => t a -> Id (t ())
+shape = traverse shapeBody
+
+runShape :: (Traversable t) => t a -> t ()
+runShape = run shape
+
+decompose :: Traversable t => t a -> ((Prod Id (Const [a])) (t ()))
+-- decompose = shape <&> contents -- NAIVE
+decompose = traverse (shapeBody <&> contentsBody)
+
+
+instance Coerce (State s a) (s -> (a, s)) where
+  down = runState
+  up = State
+
+instance Coerce (Maybe a) (Maybe a) where
+  down = id
+  up = id
+
+instance Functor (State s) where
+  fmap f sa = State(\s -> let (a, s') = runState sa s
+                     in (f a, s'))
+
+instance Monad (State s) where
+  return a = State(\s -> (a, s))
+  sa >>= f = State(\s -> let (a, s') = runState sa s
+                      in runState (f a) s')
+
+instance Functor (Maybe) where
+  fmap f (Just a) = Just (f a)
+  fmap f Nothing = Nothing
+
+instance Monad (Maybe) where
+  return a = Just a
+
+  Just a >>= f = f a
+  Nothing >>= _ = Nothing
+
+reassembleBody :: () -> Comp (M (State [a])) (M Maybe) a
+reassembleBody = let in up . takeHead
+  where takeHead _ []     = (Nothing, [])
+        takeHead _ (x:xs) = (Just x, xs)
+
+
+reassemble :: Traversable t => t () -> Comp (M (State [a])) (M Maybe) (t a)
+reassemble = traverse reassembleBody
+
+runReassemble :: Traversable t => (t (), [a]) -> Maybe (t a)
+runReassemble = fst . uncurry (run reassemble) -- magic
+
+-- run reassemble t = (s, c) <=> run reassemble s c = (Just t, [])
+
+
