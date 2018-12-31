@@ -353,3 +353,21 @@ backwards = AppAdapter Backwards runBackwards
 ptraverse :: (Applicative m, Traversable t) => AppAdapter m -> (a -> m b) -> t a -> m (t b)
 ptraverse (AppAdapter insert retrieve) f = retrieve . traverse (insert . f)
 
+
+-- 5. LAWS OF TRAVERSE
+
+-- 5.1 Free theorems of traversal
+
+{-
+| A parametrically polymorphic function enjoys a property that follows entirely
+  from its type, without any consideration of its implementation
+
+(1) dist . fmap (fmap k) == fmap (fmap k) . dist (2)
+(1) t (m a) => t (m b) => m (t b)
+(2) t (m a) => m (t a) => m (t b)
+
+| Corollaries, theorem for traverse:
+
+traverse (g . h) = traverse g . fmap h
+traverse (fmap k . f) = fmap (fma k) . traverse f
+-}
