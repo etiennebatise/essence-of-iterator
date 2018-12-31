@@ -391,3 +391,25 @@ Which means:
 (2) => traverse (f <.> g) = traverse f <.> traverse g
 -}
 
+-- 5.3 Idiomatic naturality
+
+{-
+Preserving Purity Law
+| This definition of traverse in which the two children are swapped on traversal
+  breaks the Purity Law.
+
+instance Traversable Tree where
+  traverse f (Leaf x)  = pure Leaf <*> f x
+  traverse f (Bin l r) = pure Bin <*> traverse f r <*> traverse f l
+
+| This definition of traverse doesn't break the Purity Law. The two children are
+  swapped on traversal but the 'Bin' operater is flipped to compensate. The
+  effect of the reversal is that the elements of the tree are traversed from
+  right to left.
+
+instance Traversable Tree where
+  traverse f (Leaf x)  = pure Leaf <*> f x
+  traverse f (Bin l r) = pure (flip Bin) <*> traverse f r <*> traverse f l
+ Btw, we can use 'Backwards' to achieve the same reversed traversal.
+
+-}
