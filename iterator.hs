@@ -9,7 +9,7 @@
 
 import Data.Monoid
 import Data.Monoid (Sum)
-import Prelude (Integer, Num, Maybe(..), curry, uncurry, fst, snd, (+), flip)
+import Prelude (Integer, Num, Maybe(..), curry, uncurry, fst, snd, (+), (*), flip)
 
 
 (.) :: (b -> c) -> (a -> b) -> (a -> c)
@@ -411,5 +411,59 @@ instance Traversable Tree where
   traverse f (Leaf x)  = pure Leaf <*> f x
   traverse f (Bin l r) = pure (flip Bin) <*> traverse f r <*> traverse f l
  Btw, we can use 'Backwards' to achieve the same reversed traversal.
+
+-}
+
+
+-- 5.4 Seqential composition of monadic traversals
+
+(<=<) :: Monad m => (b -> m c) -> (a -> m b) -> (a -> m c)
+(<=<) f g x = g x >>= (f)
+
+
+(>=>) :: Monad m => (a -> m b) -> (b -> m c) -> (a -> m c)
+(>=>) = flip (<=<)
+
+{-
+| The monad m is commutative if for all mx and my
+do {x <- mx; y <- my; return (x, y)} == do { y <- my; x <- mx; return (x, y)}
+
+f :: b -> m c
+g :: a -> m b
+traverse f <=< traverse g = traverse (f <=< g)
+
+ => join . Comp == (>>= id) . Comp :: Comp m m -> m
+-}
+update1 :: a -> State Integer a
+update1 x = get >>= (\i -> put (i*2) >>= (\_ -> return x))
+
+update2 :: a -> State Integer a
+update2 x = get >>= (\i -> put (i+1) >>= (\_ -> return x))
+
+
+instance Applicative (State s) where
+  pure a  = State(\s -> (a, s))
+  sf <*> sa = State(\s -> let (g, s') = runState sf s
+                              (a, s'') = runState sa s'
+                 in (g a, s''))
+
+monadic1 :: Traversable t => t a -> State Integer (t a)
+monadic1 = traverse update1 <=< traverse update2
+
+monadic2 :: Traversable t => t a -> State Integer (t a)
+monadic2 = traverse (update1 <=< update2)
+
+applicative1 :: Traversable t => t a -> Comp (State Integer) (State Integer) (t a)
+applicative1 = traverse update1 <.> traverse update2
+
+applicative2 :: Traversable t => t a -> Comp (State Integer) (State Integer) (t a)
+applicative2 = traverse (update1 <.> update2)
+
+{-
+| update1 and update2 don't commute. So monadic1 != monadic2 in general.
+  Nevertheless applicative1= == applicative2.
+
+| The only advantage of the monadic law it the number of levels (1 level of
+  monad vs 2 levels of A.F.)
 
 -}
