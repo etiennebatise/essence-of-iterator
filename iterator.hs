@@ -4,10 +4,12 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
 -- {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 
 import Data.Monoid
 import Data.Monoid (Sum)
-import Prelude (Integer, Num, Maybe(..), curry, uncurry, fst, snd, (+))
+import Prelude (Integer, Num, Maybe(..), curry, uncurry, fst, snd, (+), flip)
 
 
 (.) :: (b -> c) -> (a -> b) -> (a -> c)
@@ -331,3 +333,23 @@ label = disperse (Wrap (step)) (curry snd)
 step :: State Integer Integer
 step = get >>= (\i -> put (i+1)
                >>= (\_ -> return i))
+
+-- 4.3 Backward Traversal
+newtype Backwards m a = Backwards { runBackwards :: m a }
+
+instance Functor m => Functor (Backwards m) where
+  fmap f = Backwards . fmap f . runBackwards
+
+instance Applicative m => Applicative (Backwards m) where
+  pure = Backwards . pure
+  f <*> a = Backwards (pure (flip ($)) <*> (runBackwards a) <*> (runBackwards f))
+
+data AppAdapter m where
+  AppAdapter ::  Applicative (g m) => (forall a. m a -> g m a) -> (forall a. g m a -> m a) -> AppAdapter m
+
+backwards :: Applicative m => AppAdapter m
+backwards = AppAdapter Backwards runBackwards
+
+ptraverse :: (Applicative m, Traversable t) => AppAdapter m -> (a -> m b) -> t a -> m (t b)
+ptraverse (AppAdapter insert retrieve) f = retrieve . traverse (insert . f)
+
