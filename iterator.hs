@@ -1,4 +1,10 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE UndecidableInstances #-}
+-- {-# LANGUAGE AllowAmbiguousTypes #-}
+
 import Data.Monoid
 import Data.Monoid (Sum)
 import Prelude (Integer, Num)
@@ -136,12 +142,10 @@ instance (Applicative m, Applicative n) => Applicative (Prod m n) where
   pure x = Prod (pure x) (pure x)
   f <*> x = Prod (pfst f <*> pfst x) (psnd f <*> psnd x)
 
-
 data (Comp m n) a = Comp { unComp :: m (n a) }
 
 (<.>) :: (Functor n, Functor m) => (b -> n c) -> (a -> m b) -> (a -> (Comp m n) c)
 f <.> g = Comp . fmap f . g
-
 
 instance (Functor m, Functor n) => Functor (Comp m n) where
   fmap f = Comp . fmap (fmap f) . unComp
@@ -176,7 +180,6 @@ instance Traversable Tree where
   traverse f (Leaf x) = pure Leaf <*> (f x)
   traverse f (Bin x y) = pure Bin <*> traverse f x <*> traverse f y
 
-
 class Bifunctor s => Bitraversable s where
   bidist :: Applicative m => s (m a) (m b) -> m (s a b)
 
@@ -187,6 +190,7 @@ instance Bitraversable s => Traversable (Fix s) where
   traverse f = foldFix(fmap In . bidist . bimap f id)
 
 newtype Id a = Id { unId :: a }
+
 instance Functor Id where
   fmap f = Id . f . unId
 
@@ -202,3 +206,29 @@ crush = reduce id
 
 tsum :: (Traversable t) => t (Sum Integer) -> Sum Integer
 tsum = crush
+
+-- 4 TRAVERSALS AS ITERATORS 
+
+class Coerce a b | a -> b where
+  down ::  a -> b
+  up :: b -> a
+
+instance Coerce (Id a) a where
+  down = unId
+  up = Id
+
+instance Coerce (Const a b) a where
+  down = unConst
+  up = Const
+
+instance (Coerce (m a) b, Coerce (n a) c) => Coerce (Prod m n a) (b, c) where
+  down x = (down $ pfst x, down $ psnd x)
+  up (x, y)= Prod (up x) (up y)
+
+instance (Functor m, Functor n, Coerce (m b) c, Coerce (n a) b) => Coerce (Comp m n a) c where
+  down = down . fmap down . unComp
+  up =  Comp . fmap up . up
+
+instance Coerce (m a) b => Coerce (M m a) b where
+  down = down . unWrap
+  up = Wrap . up
