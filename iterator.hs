@@ -7,7 +7,7 @@
 
 import Data.Monoid
 import Data.Monoid (Sum)
-import Prelude (Integer, Num, Maybe(..), uncurry, fst)
+import Prelude (Integer, Num, Maybe(..), curry, uncurry, fst, snd, (+))
 
 
 (.) :: (b -> c) -> (a -> b) -> (a -> c)
@@ -304,4 +304,30 @@ runReassemble = fst . uncurry (run reassemble) -- magic
 
 -- run reassemble t = (s, c) <=> run reassemble s c = (Just t, [])
 
+-- 4.2 Collection and dispersal
 
+-- accumulates elements effectfully (a -> m ()), but modifies elements purely and
+-- independently of accumulation
+collect ::  (Traversable t, Applicative m) => (a -> m ()) -> (a -> b) -> t a -> m (t b)
+collect f g = traverse (\a -> pure (\_ -> g a) <*> f a)
+
+get :: State a a
+get = State(\s -> (s, s))
+
+put :: s -> State s ()
+put s = State(\_ -> ((), s))
+
+loop :: Traversable t => (a -> b) -> t a -> M (State Integer) (t b)
+-- loop = collect (\a -> up (\i -> ((), i+1)))
+loop = collect (\_ -> Wrap (get >>= (put . (1+))))
+
+-- modifies elements purely (a -> b -> c) but dependent on the state
+disperse :: (Traversable t, Applicative m) => m b -> (a -> b -> c) -> t a -> m (t c)
+disperse mb g = traverse (\a -> pure (g a) <*> mb )
+
+label :: Traversable t => t a -> M (State Integer) (t Integer)
+label = disperse (Wrap (step)) (curry snd) 
+
+step :: State Integer Integer
+step = get >>= (\i -> put (i+1)
+               >>= (\_ -> return i))
