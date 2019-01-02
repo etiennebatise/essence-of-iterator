@@ -9,7 +9,7 @@
 
 import Data.Monoid
 import Data.Monoid (Sum)
-import Prelude (Integer, Num, Maybe(..), curry, uncurry, fst, snd, (+), (*), flip)
+import Prelude (Integer, Num, Maybe(..), curry, uncurry, fst, snd, (+), (*), flip, const)
 
 
 (.) :: (b -> c) -> (a -> b) -> (a -> c)
@@ -483,3 +483,16 @@ how to use :
 > runState (fmap (flip runState 1) $ unComp $ applicative1 [0, 0]) 1
 > (([0], 4), 3)
 -}
+
+-- 5.5 No duplication of elements
+
+-- Satisfies purity but behaves strangely
+weirdTraverse :: Applicative m => (a -> m b) -> [a] -> m [b]
+weirdTraverse f [] = pure []
+weirdTraverse f (x:xs) = pure (const (:)) <*> f x <*> f x <*> weirdTraverse f xs
+
+index :: Traversable t => t a -> (t Integer, Integer)
+index xs = run label xs 0
+
+-- if Traversable for list is defined with weirdTraverse, then
+-- index "abc" == (ys,6) and runContents ys == [1, 1, 3, 3, 5, 5]
