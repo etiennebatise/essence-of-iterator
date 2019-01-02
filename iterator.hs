@@ -9,8 +9,9 @@
 
 import Data.Monoid
 import Data.Monoid (Sum)
-import Prelude (Integer, Num, Maybe(..), curry, uncurry, fst, snd, (+), (*), flip, const, Char, String, Bool (True, False), Show,  (==), not, (&&))
+import Prelude (Integer, Num, Maybe(..), curry, uncurry, fst, snd, (+), (*), flip, const, Char, String, Bool (True, False), Show,  (==), not, (&&), mapM)
 import Data.Char (isSpace)
+import Control.Monad.Trans.Writer
 
 
 (.) :: (b -> c) -> (a -> b) -> (a -> c)
@@ -588,5 +589,38 @@ type WordCount = Comp (M (State Bool)) Count
 wcqui :: String -> (Prod Pair WordCount) [Bool]
 wcqui = traverse (quiBody <&> wciBody)
 
+-- In general component traversals may not be so amenable to composition as in
+-- 'wcqui', and Product may not be the appropiate combinator. Here we use
+-- Compose instead.
 wcqui' :: String -> (Comp (Prod Id WordCount) Pair) [Bool]
 wcqui' = traverse (quiBody <.> (Id <&> wciBody))
+
+-- 6.3 Modular iterations, monadically
+
+-- Fix me : Writer is not a monad 0_0
+ccmBody :: Char -> Writer (Sum Integer) Char
+ccmBody c = do { tell (Sum 1); writer (c, mempty) }
+
+ccm :: String -> Writer (Sum Integer) String
+ccm = mapM ccmBody
+
+lcmBody :: Char -> Writer (Sum Integer) Char
+lcmBody c = do { tell . Sum $ test (c == '\n'); writer (c, mempty)}
+
+lcm :: String -> Writer (Sum Integer) String
+lcm = mapM lcmBody
+
+  
+
+wcmBody :: Char -> State(Integer, Bool) Char
+wcmBody c = let s = not (isSpace c)
+            in get >>= (\(n, w) -> put(n + test(not w && s), s)
+                     >>= (\_ -> return c))
+
+-- _mapM = traverse 
+-- Yeah yeah i knnow .. that's cheating
+_mapM :: (Monad m, Functor t) => (a -> m b) -> t a -> m (t b)
+_mapM f = _
+
+wcm :: String -> State(Integer, Bool) String
+wcm = _mapM wcmBody
