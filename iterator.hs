@@ -9,7 +9,8 @@
 
 import Data.Monoid
 import Data.Monoid (Sum)
-import Prelude (Integer, Num, Maybe(..), curry, uncurry, fst, snd, (+), (*), flip, const)
+import Prelude (Integer, Num, Maybe(..), curry, uncurry, fst, snd, (+), (*), flip, const, Char, String, Bool (True, False), Show,  (==), not, (&&))
+import Data.Char (isSpace)
 
 
 (.) :: (b -> c) -> (a -> b) -> (a -> c)
@@ -106,7 +107,7 @@ newtype Reader r a = Reader { runReader :: r -> a }
 
 -- 3.2 Monoidal applicative functors
 
-newtype Const a b = Const { unConst :: a }
+newtype Const a b = Const { unConst :: a } deriving Show
 
 -- class Monoid a where
 --   mempty :: a
@@ -131,7 +132,7 @@ instance Applicative [] where
 
 -- 3.3 Combining applicative functors
 
-data (Prod m n) a = Prod { pfst :: m a, psnd :: n a }
+data (Prod m n) a = Prod { pfst :: m a, psnd :: n a } deriving Show
 
 (<&>) :: (Functor m, Functor n) => (a -> m b) -> (a -> n b) -> (a -> (Prod m n) b)
 (<&>) f g x = Prod (f x) (g x)
@@ -496,3 +497,96 @@ index xs = run label xs 0
 
 -- if Traversable for list is defined with weirdTraverse, then
 -- index "abc" == (ys,6) and runContents ys == [1, 1, 3, 3, 5, 5]
+
+-- 6 MODULAR PROGRAMING WITH APPLICATIVE FUNCTORS
+
+-- 6.1 An example: wordcount
+
+-- 6.2 Modular iterations idiomatically
+
+-- instance Functor [] where
+--   fmap f [] = []
+--   fmap f (x:xs) = f x : fmap f xs
+instance Traversable [] where
+  traverse f [] = pure []
+  traverse f (x:xs) = pure (:) <*> f x <*> traverse f xs
+
+-- Integer as Monoid-af
+-- Reminder 3.2 : Const a is an A.F iff a is a monoid
+-- Integer is not an ovious monoid because you can have (0,+) or (1,*)
+-- type Count = Const (Sum Integer)
+type Count = Const (Sum Integer)
+
+count :: Integer -> Count b
+count n = Const (Sum n)
+
+-- Count Character Idiomatically
+cciBody :: Char -> Count a
+cciBody _ = count 1
+
+cci :: String -> Count [a]
+cci = traverse cciBody
+
+test :: Bool -> Integer
+test b = if b then 1 else 0
+
+lciBody :: Char -> Count a
+lciBody c = count $ test ('\n' == c)
+
+lci :: String -> Count [a]
+lci = traverse lciBody
+
+wciBody :: Char -> Comp (M (State Bool)) Count a
+wciBody c = up (updateState c)
+  where
+    updateState :: Char -> Bool -> (Sum Integer, Bool)
+    updateState c b = let s = not (isSpace c) in (Sum $ test (not b && s), s)
+
+wci :: String -> Comp (M (State Bool)) Count [a]
+wci = traverse wciBody
+
+runWci :: String -> Integer
+runWci s = getSum $ fst (run wci s False)
+
+clci :: String -> Prod Count Count [a]
+-- clci = cci <&> lci -- inefficient
+clci = traverse (cciBody <&> lciBody)
+
+clwci :: String -> Prod (Prod Count Count) (Comp (M (State Bool)) Count) [a]
+clwci = traverse (cciBody <&> lciBody <&> wciBody)
+
+runCclwi :: String -> (Integer, Integer, Integer)
+runCclwi s = uncurry f (run clwci s)
+  where
+    f (Sum cc, Sum lc) wcs = (cc, lc, getSum . fst $ wcs False)
+
+-- Note: character and line-counting are monoidal,whereas word-counting is monadic
+
+-- Next is an experiment using a Naperian A.F.
+-- Goal: Determine if the distribution of the letters 'q' and 'u' in a text are correlated.
+
+newtype Pair a = P (a, a) deriving Show
+
+instance Functor Pair where
+  fmap f (P (x, x')) = P(f x, f x')
+
+instance Applicative Pair where
+  pure x = P (x, x)
+  P (f, f') <*> P (x, x') = P (f x, f' x)
+
+quiBody :: Char -> Pair Bool
+quiBody c = P (c == 'q', c == 'u')
+
+quiString :: String -> Pair [Bool]
+quiString = traverse quiBody
+
+ccqui :: String -> (Prod Count Pair) [Bool]
+ccqui = traverse (cciBody <&> quiBody)
+
+type WordCount = Comp (M (State Bool)) Count
+
+wcqui :: String -> (Prod Pair WordCount) [Bool]
+wcqui = traverse (quiBody <&> wciBody)
+
+wcqui' :: String -> (Comp (Prod Id WordCount) Pair) [Bool]
+wcqui' = traverse (quiBody <.> (Id <&> wciBody))
