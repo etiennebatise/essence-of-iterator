@@ -293,7 +293,7 @@ instance Monad (Maybe) where
   Nothing >>= _ = Nothing
 
 reassembleBody :: () -> Comp (M (State [a])) (M Maybe) a
-reassembleBody = let in up . takeHead
+reassembleBody = up . takeHead
   where takeHead _ []     = (Nothing, [])
         takeHead _ (x:xs) = (Just x, xs)
 
@@ -377,8 +377,12 @@ traverse (fmap k . f) = fmap (fma k) . traverse f
 {-
 | dist should respect identity A.F. and composition A.F. :
 
-dist . fmap Id = Id
-dist . fmap Comp = Comp . fmap dist .dist
+(1) dist . fmap Id = Id
+(2) dist . fmap Comp = Comp . fmap dist . dist
+
+(1) dist . fmap Id (t a) => dist (t (Id a)) => Id (t a)
+(2) dist . fmap Comp (t (m (n a))) => dist (t (Comp m n a)) => Comp m n (t a)
+(2) Comp . fmap dist . dist (t (m (n a))) => Comp . fmap dist (m (t (n a))) => Comp (m (n (t a))) => Comp m n (t a)
 
 | Corollaries, properties of traverse:
 
@@ -394,7 +398,8 @@ Which means:
 -- 5.3 Idiomatic naturality
 
 {-
-Preserving Purity Law
+| Preserving Purity Law
+
 | This definition of traverse in which the two children are swapped on traversal
   breaks the Purity Law.
 
@@ -410,8 +415,11 @@ instance Traversable Tree where
 instance Traversable Tree where
   traverse f (Leaf x)  = pure Leaf <*> f x
   traverse f (Bin l r) = pure (flip Bin) <*> traverse f r <*> traverse f l
- Btw, we can use 'Backwards' to achieve the same reversed traversal.
 
+| Consequence of naturality
+traverse (f <&> g) == traverse f <&> traverse g
+
+| Btw, we can use 'Backwards' to achieve the same reversed traversal.
 -}
 
 
@@ -465,5 +473,13 @@ applicative2 = traverse (update1 <.> update2)
 
 | The only advantage of the monadic law it the number of levels (1 level of
   monad vs 2 levels of A.F.)
+-}
 
+{-
+how to use :
+> runState (fmap (flip runState 2) $ unComp $ applicative1 [0]) 2
+> (([0], 4), 3)
+
+> runState (fmap (flip runState 1) $ unComp $ applicative1 [0, 0]) 1
+> (([0], 4), 3)
 -}
